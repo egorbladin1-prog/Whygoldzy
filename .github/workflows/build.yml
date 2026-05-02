@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       server_name:
-        description: 'Server Name to replace BLACK RP'
+        description: 'Server Name'
         required: true
       api_link:
-        description: 'Dropbox JSON Link'
+        description: 'JSON API Link'
         required: true
       chat_id:
         description: 'Telegram Chat ID to send APK'
@@ -33,26 +33,26 @@ jobs:
               echo "APK не найден в репозитории!"
               exit 1
           fi
-          echo "Декомпилирую $APK_FILE..."
-          apktool d "$APK_FILE" -o decompiled_apk
+          echo "Декомпилирую $APK_FILE (без ресурсов)..."
+          apktool d -r "$APK_FILE" -o decompiled_apk
 
       - name: Replace strings in smali and xml
         run: |
-          # Ищем BLACK RP и меняем на название сервера в ресурсах и коде
+          # Ищем BLACK RP и меняем на название сервера (если оно осталось в smali)
           find decompiled_apk -type f \( -name "*.xml" -o -name "*.smali" \) -exec sed -i "s/BLACK RP/${{ github.event.inputs.server_name }}/g" {} +
           
-          # ЗАМЕНИ ТУТ 'YOUR_DEFAULT_API_LINK_HERE' НА СТРОКУ ИЗ ТВОЕГО СТАРОГО ЛАУНЧЕРА
-          find decompiled_apk -type f \( -name "*.xml" -o -name "*.smali" \) -exec sed -i "s|YOUR_DEFAULT_API_LINK_HERE|${{ github.event.inputs.api_link }}|g" {} +
+          # Заменяем YOUR_DEFAULT_API_LINK_HERE на сгенерированную Gist ссылку
+          find decompiled_apk -type f \( -name "*.xml" -o -name "*.smali" \) -exec sed -i "s#YOUR_DEFAULT_API_LINK_HERE#${{ github.event.inputs.api_link }}#g" {} +
 
       - name: Rebuild APK
         run: |
-          echo "Собираю измененный APK..."
-           apktool b decompiled_apk -o modded_unsigned.apk --use-aapt2
+          echo "Собираю измененный АПК..."
+          apktool b decompiled_apk -o modded_unsigned.apk --use-aapt2
 
       - name: Sign APK
         run: |
           echo "Генерирую временный ключ и подписываю..."
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           zipalign -v -p 4 modded_unsigned.apk modded_aligned.apk
           apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --out final_launcher.apk modded_aligned.apk
 
@@ -61,6 +61,6 @@ jobs:
           TELEGRAM_TOKEN: "8679586869:AAH0xt5y3RFjlbhHSAXV20VpC0t2ZKJ1YVE"
         run: |
           curl -F document=@"final_launcher.apk" \
-               -F caption="✅ Лаунчер для проекта <b>${{ github.event.inputs.server_name }}</b> успешно модифицирован и подписан!" \
+               -F caption="✅ Лаунчер для проекта <b>${{ github.event.inputs.server_name }}</b> собран!" \
                -F parse_mode="HTML" \
                "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument?chat_id=${{ github.event.inputs.chat_id }}"
