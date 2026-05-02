@@ -28,13 +28,13 @@ jobs:
 
       - name: Decompile APK
         run: |
-          apktool d "$APK_FILE" -o decompiled_apk
+          APK_FILE=$(find . -maxdepth 1 -name "*.apk" | head -n 1)
           if [ -z "$APK_FILE" ]; then
-            echo "APK не найден в репозитории!"
-            exit 1
+              echo "APK не найден в репозитории!"
+              exit 1
           fi
           echo "Декомпилирую $APK_FILE..."
-          apktool b decompiled_apk -o app.apk --use-aapt2
+          apktool d "$APK_FILE" -o decompiled_apk
 
       - name: Replace strings in smali and xml
         run: |
