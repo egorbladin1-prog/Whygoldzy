@@ -1,0 +1,66 @@
+name: Mod APK and Send
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_name:
+        description: 'Server Name to replace BLACK RP'
+        required: true
+      api_link:
+        description: 'Dropbox JSON Link'
+        required: true
+      chat_id:
+        description: 'Telegram Chat ID to send APK'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apktool apksigner zipalign default-jdk
+
+      - name: Decompile APK
+        run: |
+          APK_FILE=$(find . -maxdepth 1 -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "APK не найден в репозитории!"
+            exit 1
+          fi
+          echo "Декомпилирую $APK_FILE..."
+          apktool d "$APK_FILE" -o decompiled_apk
+
+      - name: Replace strings in smali and xml
+        run: |
+          # Ищем BLACK RP и меняем на название сервера в ресурсах и коде
+          find decompiled_apk -type f \( -name "*.xml" -o -name "*.smali" \) -exec sed -i "s/BLACK RP/${{ github.event.inputs.server_name }}/g" {} +
+          
+          # ЗАМЕНИ ТУТ 'YOUR_DEFAULT_API_LINK_HERE' НА СТРОКУ ИЗ ТВОЕГО СТАРОГО ЛАУНЧЕРА
+          find decompiled_apk -type f \( -name "*.xml" -o -name "*.smali" \) -exec sed -i "s|YOUR_DEFAULT_API_LINK_HERE|${{ github.event.inputs.api_link }}|g" {} +
+
+      - name: Rebuild APK
+        run: |
+          echo "Собираю измененный APK..."
+          apktool b decompiled_apk -o modded_unsigned.apk
+
+      - name: Sign APK
+        run: |
+          echo "Генерирую временный ключ и подписываю..."
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+          zipalign -v -p 4 modded_unsigned.apk modded_aligned.apk
+          apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --out final_launcher.apk modded_aligned.apk
+
+      - name: Send APK to Telegram
+        env:
+          TELEGRAM_TOKEN: "8679586869:AAH0xt5y3RFjlbhHSAXV20VpC0t2ZKJ1YVE"
+        run: |
+          curl -F document=@"final_launcher.apk" \
+               -F caption="✅ Лаунчер для проекта <b>${{ github.event.inputs.server_name }}</b> успешно модифицирован и подписан!" \
+               -F parse_mode="HTML" \
+               "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument?chat_id=${{ github.event.inputs.chat_id }}"
