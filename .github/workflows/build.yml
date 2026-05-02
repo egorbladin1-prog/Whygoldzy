@@ -28,7 +28,7 @@ jobs:
 
       - name: Decompile APK
         run: |
-          APK_FILE=$(find . -maxdepth 1 -name "*.apk" | head -n 1)
+          apktool d "$APK_FILE" -o decompiled_apk
           if [ -z "$APK_FILE" ]; then
             echo "APK не найден в репозитории!"
             exit 1
