@@ -47,7 +47,7 @@ jobs:
       - name: Rebuild APK
         run: |
           echo "Собираю измененный APK..."
-          apktool b decompiled_apk -o modded_unsigned.apk
+           apktool b decompiled_apk -o modded_unsigned.apk --use-aapt2
 
       - name: Sign APK
         run: |
