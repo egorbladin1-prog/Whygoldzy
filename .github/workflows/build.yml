@@ -1,66 +1,33 @@
 name: Mod APK and Send
-
 on:
+  repository_dispatch:
+    types: [build_apk]
   workflow_dispatch:
-    inputs:
-      server_name:
-        description: 'Server Name'
-        required: true
-      api_link:
-        description: 'JSON API Link'
-        required: true
-      chat_id:
-        description: 'Telegram Chat ID to send APK'
-        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y apktool apksigner zipalign default-jdk
-
-      - name: Decompile APK
-        run: |
-          APK_FILE=$(find . -maxdepth 1 -name "*.apk" | head -n 1)
-          if [ -z "$APK_FILE" ]; then
-              echo "APK не найден в репозитории!"
-              exit 1
-          fi
-          echo "Декомпилирую $APK_FILE (без ресурсов)..."
-          apktool d -r "$APK_FILE" -o decompiled_apk
-
-      - name: Replace strings in smali and xml
-        run: |
-          # Ищем BLACK RP и меняем на название сервера (если оно осталось в smali)
-          find decompiled_apk -type f \( -name "*.xml" -o -name "*.smali" \) -exec sed -i "s/BLACK RP/${{ github.event.inputs.server_name }}/g" {} +
+      - uses: actions/checkout@v3
+      
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
           
-          # Заменяем YOUR_DEFAULT_API_LINK_HERE на сгенерированную Gist ссылку
-          find decompiled_apk -type f \( -name "*.xml" -o -name "*.smali" \) -exec sed -i "s#YOUR_DEFAULT_API_LINK_HERE#${{ github.event.inputs.api_link }}#g" {} +
-
-      - name: Rebuild APK
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+        
+      - name: Build APK
+        run: ./gradlew assembleDebug
+        
+      - name: Upload to Cloud and Send Link
         run: |
-          echo "Собираю измененный АПК..."
-          apktool b decompiled_apk -o modded_unsigned.apk --use-aapt2
-
-      - name: Sign APK
-        run: |
-          echo "Генерирую временный ключ и подписываю..."
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          zipalign -v -p 4 modded_unsigned.apk modded_aligned.apk
-          apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --out final_launcher.apk modded_aligned.apk
-
-      - name: Send APK to Telegram
-        env:
-          TELEGRAM_TOKEN: "8679586869:AAH0xt5y3RFjlbhHSAXV20VpC0t2ZKJ1YVE"
-        run: |
-          curl -F document=@"final_launcher.apk" \
-               -F caption="✅ Лаунчер для проекта <b>${{ github.event.inputs.server_name }}</b> собран!" \
-               -F parse_mode="HTML" \
-               "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument?chat_id=${{ github.event.inputs.chat_id }}"
+          APK_PATH=$(find . -name "*.apk" | head -n 1)
+          echo "Found APK: $APK_PATH"
+          LINK=$(curl -sT "$APK_PATH" https://bashupload.com/app-release.apk)
+          CHAT_ID="${{ github.event.client_payload.chat_id }}"
+          if [ -z "$CHAT_ID" ]; then CHAT_ID="${{ secrets.TELEGRAM_TO }}"; fi
+          TEXT="✅ <b>Сборка успешно завершена!</b>%0A%0A📥 <b>Скачать APK:</b> $LINK%0A%0A<i>Ссылка будет работать несколько дней.</i>"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="$CHAT_ID" -d text="$TEXT" -d parse_mode="HTML"
