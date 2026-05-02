@@ -1,33 +1,40 @@
-name: Mod APK and Send
+name: Build APK
+
 on:
-  repository_dispatch:
-    types: [build_apk]
   workflow_dispatch:
+    inputs:
+      server_name:
+        description: 'Server Name'
+        required: true
+      api_link:
+        description: 'JSON Config Link'
+        required: true
+      chat_id:
+        description: 'Chat ID'
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
-          
+
       - name: Make gradlew executable
         run: chmod +x gradlew
-        
+
       - name: Build APK
         run: ./gradlew assembleDebug
-        
+
       - name: Upload to Cloud and Send Link
         run: |
           APK_PATH=$(find . -name "*.apk" | head -n 1)
-          echo "Found APK: $APK_PATH"
           LINK=$(curl -sT "$APK_PATH" https://bashupload.com/app-release.apk)
-          CHAT_ID="${{ github.event.client_payload.chat_id }}"
-          if [ -z "$CHAT_ID" ]; then CHAT_ID="${{ secrets.TELEGRAM_TO }}"; fi
-          TEXT="✅ <b>Сборка успешно завершена!</b>%0A%0A📥 <b>Скачать APK:</b> $LINK%0A%0A<i>Ссылка будет работать несколько дней.</i>"
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d chat_id="$CHAT_ID" -d text="$TEXT" -d parse_mode="HTML"
+          CHAT_ID="${{ github.event.inputs.chat_id }}"
+          TEXT="✅ Сборка успешно завершена!%0A%0A⬇️ <b>Скачать APK:</b> $LINK%0A%0A<i>Ссылка будет работать несколько дней.</i>"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" -d "chat_id=$CHAT_ID" -d "text=$TEXT" -d "parse_mode=HTML"
