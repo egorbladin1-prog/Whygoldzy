@@ -36,7 +36,10 @@ jobs:
 
       - name: Patch URL in smali and xml
         run: |
-          find decoded -type f \( -name "*.smali" -o -name "*.xml" \) -exec sed -i "s|https://www.dropbox.com/scl/fi/shml167nf1vjgxhjldgsy/servers-Sotka.json?rlkey=wcxobzpsoz8l8pckkykj2c7nt&st=jx2tys0c&dl=1|${{ github.event.inputs.api_link }}|g" {} +
+          find decoded -type f \( -name "*.smali" -o -name "*.xml" \) -exec sed -i "s|servers.json${{ github.event.inputs.api_link }}|g" {} +
+
+      - name: Remove anti-tamper files
+        run: find decoded/res/ -type f -name '*$*' -delete
 
       - name: Rebuild APK
         run: apktool b decoded -o unsigned.apk
